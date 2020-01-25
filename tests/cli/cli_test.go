@@ -8,6 +8,8 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
+
 	// "strings"
 	"syscall"
 	"testing"
@@ -612,50 +614,37 @@ func TestNotIdle(t *testing.T) {
 }
 
 func TestBypass(t *testing.T) {
-  dir := test_helpers.InitFS(t)
-  mnt := dir + ".mnt"
+	dir := test_helpers.InitFS(t)
+	mnt := dir + ".mnt"
+	test_helpers.MountOrFatal(t, dir, mnt, "-namedecr=*", "-extpass=echo test")
+	defer test_helpers.UnmountPanic(mnt)
 
-  test_helpers.MountOrFatal(t, dir, mnt, "-namedecr=*", "-extpass=echo test")
-
-  file := mnt + "/file"
+	file := mnt + "/normalEncryptedFile"
 	err := ioutil.WriteFile(file, []byte("somecontent"), 0600)
-  if err != nil {
-    t.Fatal(err)
-  }
-
-	/*
-  err = test_helpers.UnmountErr(mnt)
-  if err != nil {
-    t.Fatal(err)
-  }
-	*/
-
-  file1 := dir + "/file1"
-	err = ioutil.WriteFile(file1, []byte("somecontent"), 0600)
-  if err != nil {
-    t.Fatal(err)
-  }
-
-	files, err := ioutil.ReadDir(mnt + "/")
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	/*
-	fileNames := make([]string, 0)
-	for _, file := range files {
-		fileNames = append(fileNames, file.Name())
+	const invalidName = "plaintextFileInCiphertextDir"
+	file1 := dir + "/" + invalidName
+	err = ioutil.WriteFile(file1, []byte("somecontent"), 0600)
+	if err != nil {
+		t.Fatal(err)
 	}
-	*/
-
-	test_helpers.UnmountPanic(mnt)
-	// t.Fatal(fileNames)
-	t.Fatal(files)
-
-	/*
-	if !strings.Contains(string(output), "INVALID_GOCRYPTFS_NAME") {
-		// t.Fatal(string(output))
-		// t.Fatal("bypassed filename not printed")
+	// Check that plaintextFileInCiphertextDir shows up in directory listing
+	f, err := os.Open(mnt)
+	if err != nil {
+		t.Fatal(err)
 	}
-	*/
+	defer f.Close()
+	names, err := f.Readdirnames(0)
+	found := ""
+	for _, v := range names {
+		if strings.Contains(v, invalidName) {
+			found = v
+		}
+	}
+	if found == "" {
+		t.Errorf("did not find %s in %v", invalidName, names)
+	}
+	t.Log(names)
 }
